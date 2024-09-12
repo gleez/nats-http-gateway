@@ -20,6 +20,10 @@ type Handler struct {
 	nc *nats.Conn
 }
 
+func New(nc *nats.Conn) *Handler {
+	return &Handler{nc}
+}
+
 // NatsHandler routes HTTP requests to appropriate NATS operations.
 func (h *Handler) NatsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -76,7 +80,7 @@ func (h *Handler) handleNatsPublish(w http.ResponseWriter, r *http.Request) {
 	hdrs := getNatsHeaders(r.Header)
 	subj := getNatsSubject(w, r)
 
-	if err := h.nc.PublishMsg(types.NewNatsMsg(subj, reply, hdrs, body)); err != nil {
+	if err := h.nc.PublishMsg(NewNatsMsg(subj, reply, hdrs, body)); err != nil {
 		if err == nats.ErrTimeout {
 			WriteJSONError(w, http.StatusGatewayTimeout, "Request timed out")
 			return
@@ -178,6 +182,11 @@ func getNatsHeaders(httpHeaders http.Header) nats.Header {
 		}
 	}
 	return natsHeaders
+}
+
+// Error a struct to return on error
+type Error struct {
+	Message string `json:"message"`
 }
 
 // WriteJSONError writes the given error as JSON to the given writer
