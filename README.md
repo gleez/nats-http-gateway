@@ -15,6 +15,6 @@ Example:
 import "github.com/gleez/nats-http-gateway"
 
 // Initialize and use the handlers
-h := &natshttp.Handler{nc: YourNatsConnection}
+h := natshttp.New(nc)
 http.HandleFunc("/nats", h.NatsHandler)
 ```
