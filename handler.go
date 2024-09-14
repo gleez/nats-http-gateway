@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nats-io/nats.go"
 )
@@ -59,7 +60,8 @@ func (h *Handler) handleNatsReq(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusGatewayTimeout, "Request timed out")
 			return
 		}
-		WriteJSONError(w, http.StatusBadRequest, "Unable to publish")
+
+		WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -125,7 +127,7 @@ func (h *Handler) handleNatsSubscribe(w http.ResponseWriter, r *http.Request) {
 				if f, ok := w.(http.Flusher); ok {
 					f.Flush()
 				}
-				return
+				continue
 			}
 			fmt.Fprintf(w, "data: %v\n\n", buf.String())
 
@@ -176,8 +178,8 @@ func getTimeout(query url.Values) time.Duration {
 func getNatsHeaders(httpHeaders http.Header) nats.Header {
 	natsHeaders := nats.Header{}
 	for key, values := range httpHeaders {
-		if strings.HasPrefix(key, "NatsH") {
-			natsKey := strings.TrimPrefix(key, "NatsH")
+		if strings.HasPrefix(key, "Natsh-") {
+			natsKey := firstLetterToLower(strings.TrimPrefix(key, "Natsh-"))
 			natsHeaders.Add(natsKey, values[0])
 		}
 	}
@@ -222,6 +224,18 @@ func prettyJSON(b []byte) []byte {
 	var out bytes.Buffer
 	json.Indent(&out, b, "", "  ")
 	return out.Bytes()
+}
+
+func firstLetterToLower(s string) string {
+
+	if len(s) == 0 {
+		return s
+	}
+
+	r := []rune(s)
+	r[0] = unicode.ToLower(r[0])
+
+	return string(r)
 }
 
 // NewNatsMsg creates a new NATS message with subject, reply, headers, and body.
