@@ -18,3 +18,8 @@ import "github.com/gleez/nats-http-gateway"
 h := natshttp.New(nc)
 http.HandleFunc("/api/v1/nats/subjects/", h.NatsHandler)
 ```
+
+### Similar Projects
+If you’re looking for other projects in the NATS HTTP Gateway space, be sure to check out:
+
+[hats](https://github.com/RussellLuo/hats): Another NATS HTTP gateway implementation, providing similar functionality for HTTP to NATS interaction. Kudos to RussellLuo for the great work!
