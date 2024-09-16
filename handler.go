@@ -161,17 +161,15 @@ func getNatsSubject(w http.ResponseWriter, r *http.Request) string {
 
 // getTimeout extracts the timeout query parameter and converts it to time.Duration.
 func getTimeout(query url.Values) time.Duration {
-	timeoutStr := query.Get("timeout")
-	if timeoutStr == "" {
-		return 5000 * time.Millisecond
-	}
+	const defaultTimeout = 2000 * time.Millisecond
 
-	timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
-	if err != nil {
-		return 5000 * time.Millisecond
+	if timeoutStr := query.Get("timeout"); timeoutStr != "" {
+		if timeout, err := strconv.ParseInt(timeoutStr, 10, 64); err == nil {
+			return time.Duration(timeout) * time.Millisecond
+		}
 	}
-
-	return time.Duration(timeout) * time.Millisecond
+	
+	return defaultTimeout
 }
 
 // getNatsHeaders converts HTTP headers to NATS headers if they start with "NatsH".
