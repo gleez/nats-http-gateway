@@ -2,7 +2,7 @@
 
 An open‑source alternative to the Synadia Cloud HTTP Gateway, exposing NATS functionality over a clean HTTP interface. The gateway currently supports two main API groups:
 
-* **Core messaging** – publish, request/reply and server‑sent‑event subscription via the `/nats/subjects/` path.
+* **Core messaging** – publish, request/reply and server‑sent‑event subscription via the `/nats/subjects/{subject}` path.
 * **Key‑Value store API** – create, read, update and delete KV entries using the `/kv/{bucket}/{key}` path, matching the OpenAPI specification.
 
 Authentication is handled **via command‑line flags** when running the server binary:
