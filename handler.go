@@ -21,15 +21,23 @@ func New(nc *nats.Conn) *Handler {
 // NatsHandler routes HTTP requests to appropriate handlers based on path prefixes.
 func (h *Handler) NatsHandler(w http.ResponseWriter, r *http.Request) {
 	// KV API routes.
-	if strings.HasPrefix(r.URL.Path, "/kv/") {
+	if strings.HasPrefix(r.URL.Path, "/kv/") || strings.HasPrefix(r.URL.Path, "/v1/kv/") || strings.HasPrefix(r.URL.Path, "/api/v1/kv/") {
 		h.handleKvOperation(w, r)
 		return
 	}
-	// Core NATS subjects routes (e.g., "/nats/subjects/", "/v1/nats/subjects/" or the full API prefix).
+
+	// ObjectStore API routes.
+	if strings.HasPrefix(r.URL.Path, "/obj/") || strings.HasPrefix(r.URL.Path, "/v1/obj/") || strings.HasPrefix(r.URL.Path, "/api/v1/obj/") {
+		h.handleObjOperation(w, r)
+		return
+	}
+
+	// Core NATS API routes.
 	if strings.HasPrefix(r.URL.Path, "/nats/subjects/") || strings.HasPrefix(r.URL.Path, "/v1/nats/subjects/") || strings.HasPrefix(r.URL.Path, "/api/v1/nats/subjects/") {
 		h.handleCoreMessage(w, r)
 		return
 	}
+
 	// Fallback for unknown paths.
 	http.Error(w, "Invalid path", http.StatusNotFound)
 }
