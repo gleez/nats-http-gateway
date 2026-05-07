@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -16,7 +16,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// Handler is a struct that represents the NATS connection.
+// Handler provides HTTP to NATS bridging.
 type Handler struct {
 	nc *nats.Conn
 }
@@ -39,19 +39,27 @@ func (h *Handler) NatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNatsReq makes a request to NATS.
+// readRequestBody reads the request body safely.
+func readRequestBody(r *http.Request) ([]byte, error) {
+	defer r.Body.Close()
+	return io.ReadAll(r.Body)
+}
+
+// handleNatsReq makes a request to NATS and returns the response as JSON.
 func (h *Handler) handleNatsReq(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	query := r.URL.Query()
 	reply := query.Get("reply")
 	timeout := getTimeout(query)
 	subj := getNatsSubject(w, r)
+	if subj == "" {
+		return // getNatsSubject already wrote error response
+	}
 	hdrs := getNatsHeaders(r.Header)
 
 	res, err := h.nc.RequestMsg(NewNatsMsg(subj, reply, hdrs, body), timeout)
@@ -60,7 +68,6 @@ func (h *Handler) handleNatsReq(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusGatewayTimeout, "Request timed out")
 			return
 		}
-
 		WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -68,19 +75,21 @@ func (h *Handler) handleNatsReq(w http.ResponseWriter, r *http.Request) {
 	WriteJSONResponse(w, r, res)
 }
 
-// handleNatsPublish publishes a message with an optional reply.
+// handleNatsPublish publishes a message with an optional reply subject.
 func (h *Handler) handleNatsPublish(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	query := r.URL.Query()
 	reply := query.Get("reply")
 	hdrs := getNatsHeaders(r.Header)
 	subj := getNatsSubject(w, r)
+	if subj == "" {
+		return
+	}
 
 	if err := h.nc.PublishMsg(NewNatsMsg(subj, reply, hdrs, body)); err != nil {
 		if err == nats.ErrTimeout {
@@ -95,9 +104,12 @@ func (h *Handler) handleNatsPublish(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleNatsSubscribe handles subscribing to a NATS subject and streams events over HTTP.
+// handleNatsSubscribe streams NATS messages to the HTTP client as Server‑Sent Events.
 func (h *Handler) handleNatsSubscribe(w http.ResponseWriter, r *http.Request) {
 	subject := getNatsSubject(w, r)
+	if subject == "" {
+		return
+	}
 	query := r.URL.Query()
 
 	event := make(chan *nats.Msg, 10)
@@ -121,26 +133,22 @@ func (h *Handler) handleNatsSubscribe(w http.ResponseWriter, r *http.Request) {
 		select {
 		case ev := <-event:
 			var buf bytes.Buffer
-			enc := json.NewEncoder(&buf)
-			if err := enc.Encode(ev); err != nil {
-				fmt.Fprintf(w, "data: error encoding message\n\n")
+			if err := json.NewEncoder(&buf).Encode(ev); err != nil {
+				fmt.Fprint(w, "data: error encoding message\n\n")
 				if f, ok := w.(http.Flusher); ok {
 					f.Flush()
 				}
 				continue
 			}
-			fmt.Fprintf(w, "data: %v\n\n", buf.String())
-
+			fmt.Fprintf(w, "data: %s\n\n", buf.String())
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
-
 		case <-clientGone:
 			fmt.Println("Client disconnected")
 			return
-
 		case <-timeout:
-			fmt.Fprintf(w, ": nothing to send, connection closing\n\n")
+			fmt.Fprint(w, ": nothing to send, connection closing\n\n")
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
@@ -149,69 +157,63 @@ func (h *Handler) handleNatsSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getNatsSubject extracts the subject from the URL.
+// getNatsSubject extracts the subject from the URL path.
 func getNatsSubject(w http.ResponseWriter, r *http.Request) string {
 	subject := path.Base(r.URL.Path)
-	if len(subject) == 0 {
+	if subject == "" {
 		WriteJSONError(w, http.StatusBadRequest, "Subject not found")
 		return ""
 	}
 	return subject
 }
 
-// getTimeout extracts the timeout query parameter and converts it to time.Duration.
+// getTimeout extracts the timeout query parameter (in milliseconds).
 func getTimeout(query url.Values) time.Duration {
 	const defaultTimeout = 2000 * time.Millisecond
-
-	if timeoutStr := query.Get("timeout"); timeoutStr != "" {
-		if timeout, err := strconv.ParseInt(timeoutStr, 10, 64); err == nil {
-			return time.Duration(timeout) * time.Millisecond
+	if t := query.Get("timeout"); t != "" {
+		if ms, err := strconv.ParseInt(t, 10, 64); err == nil {
+			return time.Duration(ms) * time.Millisecond
 		}
 	}
-	
 	return defaultTimeout
 }
 
-// getNatsHeaders converts HTTP headers to NATS headers if they start with "NatsH".
+// getNatsHeaders converts HTTP headers prefixed with "NatsH-" to NATS headers.
 func getNatsHeaders(httpHeaders http.Header) nats.Header {
 	natsHeaders := nats.Header{}
 	for key, values := range httpHeaders {
-		if strings.HasPrefix(key, "Natsh-") {
-			natsKey := firstLetterToLower(strings.TrimPrefix(key, "Natsh-"))
+		if strings.HasPrefix(key, "NatsH-") {
+			natsKey := firstLetterToLower(strings.TrimPrefix(key, "NatsH-"))
 			natsHeaders.Add(natsKey, values[0])
 		}
 	}
 	return natsHeaders
 }
 
-// Error a struct to return on error
 type Error struct {
 	Message string `json:"message"`
 }
 
-// WriteJSONError writes the given error as JSON to the given writer
+// WriteJSONError writes an error response as JSON.
 func WriteJSONError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	response, err := json.Marshal(Error{Message: message})
-
+	payload, err := json.Marshal(Error{Message: message})
 	if err != nil {
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"code": 500, "message": "Could not write response"}`))
 		return
 	}
-
 	w.WriteHeader(statusCode)
-	w.Write(response)
+	w.Write(payload)
 }
 
+// WriteJSONResponse writes a successful NATS response as JSON.
 func WriteJSONResponse(w http.ResponseWriter, r *http.Request, result interface{}) {
 	body, err := json.Marshal(result)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		// log.Error().Err(err).Msg("JSON marshal failed")
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
@@ -225,23 +227,15 @@ func prettyJSON(b []byte) []byte {
 }
 
 func firstLetterToLower(s string) string {
-
-	if len(s) == 0 {
+	if s == "" {
 		return s
 	}
-
 	r := []rune(s)
 	r[0] = unicode.ToLower(r[0])
-
 	return string(r)
 }
 
-// NewNatsMsg creates a new NATS message with subject, reply, headers, and body.
+// NewNatsMsg creates a new NATS message.
 func NewNatsMsg(subject, reply string, headers nats.Header, body []byte) *nats.Msg {
-	return &nats.Msg{
-		Subject: subject,
-		Reply:   reply,
-		Header:  headers,
-		Data:    body,
-	}
+	return &nats.Msg{Subject: subject, Reply: reply, Header: headers, Data: body}
 }
