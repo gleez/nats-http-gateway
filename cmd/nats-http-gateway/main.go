@@ -58,7 +58,7 @@ func main() {
 	h := natshttp.New(nc)
 
 	// Register the handler for all API paths.
-	http.HandleFunc("/api/v1/nats/subjects/", h.NatsHandler)
+	http.HandleFunc("/api/v1/", h.NatsHandler)
 
 	// HTTP server configuration.
 	srv := &http.Server{Addr: ":8080"}

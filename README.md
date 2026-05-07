@@ -1,25 +1,43 @@
 # nats-http-gateway
 
-This is an open-source alternative to the Synadia Cloud's HTTP Gateway, offering a first-class HTTP interface for [NATS](http://nats.io/). It provides HTTP access to [NATS](http://nats.io/) capabilities such as key-value stores, object storage, messaging, and services, making NATS even more accessible for developers familiar with HTTP.
+An open‑source alternative to the Synadia Cloud HTTP Gateway, exposing NATS functionality over a clean HTTP interface. The gateway currently supports two main API groups:
 
-**Note:** This project is a work in progress and currently does not provide any authentication mechanisms. Please use at your own risk.
+* **Core messaging** – publish, request/reply and server‑sent‑event subscription via the `/nats/subjects/` path.
+* **Key‑Value store API** – create, read, update and delete KV entries using the `/kv/{bucket}/{key}` path, matching the OpenAPI specification.
 
-For reference and detailed documentation, check out the [Synadia Cloud HTTP Gateway documentation](https://docs.synadia.com/cloud/resources/http-gateway).
+Authentication is handled **via command‑line flags** when running the server binary:
 
-### Usage
-You can import the `natshttp` package and use it in your project, making sure that the `Handler` struct implements the [NATS connection management](https://github.com/nats-io/nats.go#advanced-usage).
-
-Example:
-
-```go
-import "github.com/gleez/nats-http-gateway"
-
-// Initialize and use the handlers
-h := natshttp.New(nc)
-http.HandleFunc("/api/v1/nats/subjects/", h.NatsHandler)
+```bash
+nats-http-gateway \
+    -s nats://demo.nats.io:4222          # NATS server URL (default: nats://127.0.0.1:4222)
+    -creds path/to/user.creds            # optional user credentials file
+    -nkey  path/to/seed.nk               # optional NKey seed file
+    -token <jwt-token>                   # optional JWT token
 ```
 
-### Similar Projects
-If you’re looking for other projects in the NATS HTTP Gateway space, be sure to check out:
+The server reads the flags at startup and builds the appropriate NATS connection options.
 
-[hats](https://github.com/RussellLuo/hats): Another NATS HTTP gateway implementation, providing similar functionality for HTTP to NATS interaction. Kudos to RussellLuo for the great work!
+> **Note:** No built‑in role‑based access control is provided; use the NATS server's security features (credentials, NKey or token) to protect the gateway.
+
+For full specification details, see the [Synadia Cloud HTTP Gateway documentation](https://docs.synadia.com/cloud/resources/http-gateway).
+
+### Usage example (in Go)
+```go
+import (
+    "net/http"
+    "github.com/gleez/nats-http-gateway"
+    "github.com/nats-io/nats.go"
+)
+
+func main() {
+    // Connect to NATS (flags can also be used when running the binary).
+    nc, _ := nats.Connect(nats.DefaultURL)
+    h := natshttp.New(nc)
+    // Register the handler – the gateway routes internally based on the path.
+    http.HandleFunc("/api/v1/", h.NatsHandler)
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+### Similar projects
+* [hats](https://github.com/RussellLuo/hats) – another NATS HTTP gateway implementation.
