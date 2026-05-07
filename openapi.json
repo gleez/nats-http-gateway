@@ -1,0 +1,3071 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "NATS HTTP Gateway",
+    "description": "This is the API for interacting with NATS and NATS\nbased services using HTTP.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.ngs.global/v1"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "paths": {
+    "/kv/{bucket}/{key}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "in": "path",
+          "name": "key",
+          "description": "Key name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "SimpleKvGet",
+        "tags": [
+          "KV API"
+        ],
+        "summary": "Retrieves a value from the key value store.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "revision",
+            "description": "the value of the key at the specified revision. Note the revision may not be available.",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Kv-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the bucket (only on application/text)"
+              },
+              "X-Nats-Kv-Created": {
+                "schema": {
+                  "type": "date-time"
+                },
+                "description": "date when the entry was created (only on application/text)"
+              },
+              "X-Nats-Kv-Revision": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the revision storing the entry (only on application/text)"
+              },
+              "X-Nats-Kv-Delta": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "number of revisions from current the KV is on (only on application/text)"
+              },
+              "X-Nats-Kv-Operation": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "PUT",
+                    "DEL",
+                    "PURGE"
+                  ]
+                },
+                "description": "the operation (PUT, DEL, PURGE) represented by the entry (only on application/text)"
+              }
+            },
+            "description": "success response body is payload, and metadata is HTTP headers. On JSON responses the value property is base64 encoded.",
+            "content": {
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "x-content-type": "application/text"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "revision": {
+                          "type": "number",
+                          "format": "uint64"
+                        },
+                        "delta": {
+                          "type": "number",
+                          "format": "uint64"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": [
+                            "PUT",
+                            "DEL",
+                            "PURGE"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "description": "value is base64 encoded",
+                          "type": "string",
+                          "format": "byte"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "KV API"
+        ],
+        "summary": "Adds a new entry to the key value store, fails if the entry exists.",
+        "operationId": "SimpleKvCreateEntry",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/text": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success response",
+            "headers": {
+              "X-Nats-Kv-Sequence": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the sequence assigned to the entry (only on application/text)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "409": {
+            "description": "Key already exists"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "KV API"
+        ],
+        "summary": "Adds or updates an existing entry at an optional revision",
+        "operationId": "SimpleKvPutEntry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "previousRevision",
+            "required": false,
+            "description": "the expected previous revision. If specified and the key is not at the specified revision the operation fails.",
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success response",
+            "headers": {
+              "X-Nats-Kv-Sequence": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the sequence assigned to the entry (only on application/text)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "409": {
+            "description": "Key already exists if previousRevision is incorrect"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "KV API"
+        ],
+        "summary": "Delete an entry",
+        "operationId": "SimpleKvDeleteEntry",
+        "parameters": [
+          {
+            "name": "purge",
+            "in": "query",
+            "description": "Purges the deleted entry",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid Request"
+          }
+        }
+      }
+    },
+    "/kvm/buckets": {
+      "get": {
+        "operationId": "ListKvStores",
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "List all key value stores",
+        "responses": {
+          "200": {
+            "description": "List of entity names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "x-content-type": "application/json"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kvm/buckets/{bucket}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "KvStoreInfo",
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "Returns metadata on the key value store",
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Kv-Name": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the bucket (only on application/text)"
+              },
+              "X-Nats-Kv-Values": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the number of entries in the KV - includes history (only on application/text)"
+              },
+              "X-Nats-Kv-History": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the number of possible history per key (only on application/text)"
+              },
+              "X-Nats-Kv-Ttl": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the amount of time entries live in the bucket (only on application/text)"
+              },
+              "X-Nats-Kv-Backing-Store": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the backing store for the KV (memory or disk) (only on application/text)"
+              },
+              "X-Nats-Kv-Size": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the size of the bucket in bytes (only on application/text)"
+              },
+              "X-Nats-Kv-Compression": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true if the KV is compressed (only on application/text)"
+              }
+            },
+            "description": "Success response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "history": {
+                      "type": "number",
+                      "format": "uint8"
+                    },
+                    "ttl": {
+                      "type": "number",
+                      "format": "int64"
+                    },
+                    "backing_store": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "compression": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "AddKvStore",
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "Add a key value store",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Max-Value-Size",
+            "schema": {
+              "type": "number"
+            },
+            "description": "the maximum size for an entry (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-History",
+            "schema": {
+              "type": "number"
+            },
+            "description": "the number of possible history per key (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Ttl",
+            "schema": {
+              "type": "number"
+            },
+            "description": "the amount of time entries live in the bucket in nanoseconds (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Max-Bytes",
+            "schema": {
+              "type": "number"
+            },
+            "description": "the maximum size of the KV in bytes (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Storage",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "file",
+                "memory"
+              ]
+            },
+            "description": "the underlying storage for the KV (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Replicas",
+            "schema": {
+              "type": "number"
+            },
+            "description": "the underlying number of replicas (only on application/text)"
+          },
+          {
+            "in": "header",
+            "name": "X-Nats-Kv-Compression",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "compress the KV store (only on application/text)"
+          }
+        ],
+        "requestBody": {
+          "description": "key store configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "max_value_size": {
+                    "type": "number",
+                    "format": "int32"
+                  },
+                  "history": {
+                    "type": "number",
+                    "format": "uint8"
+                  },
+                  "ttl": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "max_bytes": {
+                    "type": "number",
+                    "format": "uint64"
+                  },
+                  "storage": {
+                    "type": "string",
+                    "enum": [
+                      "file",
+                      "memory"
+                    ]
+                  },
+                  "replicas": {
+                    "type": "number",
+                    "format": "int"
+                  },
+                  "compression": {
+                    "type": "boolean"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "x-schema-name": "Metadata"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "Delete a store, removing all keys",
+        "operationId": "KvStoreDestroy",
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Bucket doesn't exist"
+          }
+        }
+      }
+    },
+    "/kvm/buckets/{bucket}/purge": {
+      "delete": {
+        "operationId": "KvStorePurge",
+        "tags": [
+          "KV Management API"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Purge a store removing all deleted keys",
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kvm/buckets/{bucket}/keys": {
+      "get": {
+        "operationId": "KvStoreKeys",
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "List all the keys in the store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of entity names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "x-content-type": "application/json"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kvm/buckets/{bucket}/watch": {
+      "get": {
+        "operationId": "KvStoreWatch",
+        "tags": [
+          "KV Management API"
+        ],
+        "summary": "Watches for changes in the specified store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lastValue",
+                "allHistory",
+                "updatesOnly"
+              ]
+            }
+          },
+          {
+            "name": "ignoreDeletes",
+            "in": "query",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "resumeRevision",
+            "in": "query",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "query",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bucket": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "revision": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "delta": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": [
+                        "PUT",
+                        "DEL",
+                        "PURGE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kvm/buckets/{bucket}/keys/{key}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "in": "path",
+          "name": "key",
+          "description": "Key name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "KvGetEntry",
+        "tags": [
+          "Extended KV Entry Operations"
+        ],
+        "summary": "Retrieves a value from the key value store.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "revision",
+            "description": "the value of the key at the specified revision. Note the revision may not be available.",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Kv-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the bucket (only on application/text)"
+              },
+              "X-Nats-Kv-Created": {
+                "schema": {
+                  "type": "date-time"
+                },
+                "description": "date when the entry was created (only on application/text)"
+              },
+              "X-Nats-Kv-Revision": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the revision storing the entry (only on application/text)"
+              },
+              "X-Nats-Kv-Delta": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "number of revisions from current the KV is on (only on application/text)"
+              },
+              "X-Nats-Kv-Operation": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "PUT",
+                    "DEL",
+                    "PURGE"
+                  ]
+                },
+                "description": "the operation (PUT, DEL, PURGE) represented by the entry (only on application/text)"
+              }
+            },
+            "description": "success response body is payload, and metadata is HTTP headers",
+            "content": {
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "x-content-type": "application/text"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "revision": {
+                          "type": "number",
+                          "format": "uint64"
+                        },
+                        "delta": {
+                          "type": "number",
+                          "format": "uint64"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": [
+                            "PUT",
+                            "DEL",
+                            "PURGE"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "description": "value is base64 encoded",
+                          "type": "string",
+                          "format": "byte"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Extended KV Entry Operations"
+        ],
+        "summary": "Adds a new entry to the key value store, fails if the entry exists.",
+        "operationId": "KvCreateEntry",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/text": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success response",
+            "headers": {
+              "X-Nats-Kv-Sequence": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the sequence assigned to the entry (only on application/text)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "409": {
+            "description": "Key already exists"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Extended KV Entry Operations"
+        ],
+        "summary": "Creates or updates an entry in the key value store at an optional revision",
+        "operationId": "KvPutEntry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "previousRevision",
+            "required": false,
+            "description": "the expected previous revision. If specified and the key is not at the specified revision the operation fails.",
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response",
+            "headers": {
+              "X-Nats-Kv-Sequence": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the sequence assigned to the entry (only on application/text)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success response",
+            "headers": {
+              "X-Nats-Kv-Sequence": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the sequence assigned to the entry (only on application/text)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "409": {
+            "description": "Key already exists if previousRevision is incorrect"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Extended KV Entry Operations"
+        ],
+        "summary": "Delete an entry",
+        "operationId": "KvDeleteEntry",
+        "parameters": [
+          {
+            "name": "purge",
+            "in": "query",
+            "description": "Purges the deleted entry",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid Request"
+          }
+        }
+      }
+    },
+    "/obj/{bucket}/{key}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "in": "path",
+          "name": "key",
+          "description": "Key name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "name": "metaOnly",
+          "in": "query",
+          "required": false,
+          "explode": true,
+          "description": "if true, only the metadata of the object is returned, the body will not contain any data",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "SimpleObjGet",
+        "tags": [
+          "ObjectStore API"
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Obj-Name": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the entry"
+              },
+              "X-Nats-Obj-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the bucket"
+              },
+              "X-Nats-Obj-Nuid": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the identifier that used to store the entry's data"
+              },
+              "X-Nats-Obj-Size": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the size of the entry's data in bytes"
+              },
+              "X-Nats-Obj-Mod-Time": {
+                "schema": {
+                  "type": "date-time"
+                },
+                "description": "date when the entry was last modified"
+              },
+              "X-Nats-Obj-Chunks": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint32"
+                },
+                "description": "the number of chunks used to store the entry"
+              },
+              "X-Nats-Obj-Digest": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the Base64 encoded SHA-256 digest of the entry's data"
+              },
+              "X-Nats-Obj-Description": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the description of the entry"
+              },
+              "X-Nats-Obj-Max-Chunk-Size": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the maximum size in bytes of a single chunk"
+              },
+              "X-Nats-Obj-Link-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "if set, the name of the bucket containing the entry"
+              },
+              "X-Nats-Obj-Link-Name": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "if set, the name of the entry as stored in a different bucket"
+              },
+              "X-Nats-Obj-Deleted": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "if true, the entry is marked as deleted"
+              }
+            },
+            "description": "success response body is payload, and metadata is HTTP headers",
+            "content": {
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ObjectStore API"
+        ],
+        "summary": "Adds or updates an existing entry at an optional revision",
+        "operationId": "SimpleObjPutEntry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "previousRevision",
+            "required": false,
+            "description": "the expected previous revision. If specified and the key is not at the specified revision the operation fails.",
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revision returned by the server",
+            "content": {
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "format": "uint64"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ObjectStore API"
+        ],
+        "summary": "Delete an entry",
+        "operationId": "SimpleObjDeleteEntry",
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      }
+    },
+    "/objm/buckets": {
+      "get": {
+        "operationId": "ObjmList",
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "List all object stores",
+        "responses": {
+          "200": {
+            "description": "List of entity names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "x-content-type": "application/json"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/objm/buckets/{bucket}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "ObjmStoreInfo",
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "Returns metadata on the object store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Obj-Backing-Store": {
+                "schema": {
+                  "type": "string",
+                  "description": "the backing store type - only set for application/text requests"
+                }
+              },
+              "X-Nats-Obj-Name": {
+                "schema": {
+                  "type": "string",
+                  "description": "the name of the bucket - only set for application/text requests"
+                }
+              },
+              "X-Nats-Obj-TTl": {
+                "schema": {
+                  "type": "string",
+                  "description": "the ttl for entries in the bucket in nanoseconds (0 doesn't expire) - only set for application/text requests"
+                }
+              },
+              "X-Nats-Obj-Replicas": {
+                "schema": {
+                  "type": "number",
+                  "description": "the number of replicas for the bucket - only set for application/text requests"
+                }
+              },
+              "X-Nats-Obj-Size": {
+                "schema": {
+                  "type": "number",
+                  "description": "the size of the bucket in bytes - only set for application/text requests"
+                }
+              },
+              "X-Nats-Obj-Meta-": {
+                "schema": {
+                  "type": "string",
+                  "description": "the metadata for the bucket, all keys in metadata are prefixed by `X-Nats-Obj-Meta-` - only set for application/text requests"
+                }
+              }
+            },
+            "description": "Success response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "history": {
+                      "type": "number",
+                      "format": "uint8"
+                    },
+                    "ttl": {
+                      "type": "number",
+                      "format": "int64"
+                    },
+                    "backing_store": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "compression": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "ObjmStoreAdd",
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "Add an object store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "key store configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "max_value_size": {
+                    "type": "number",
+                    "format": "int32"
+                  },
+                  "history": {
+                    "type": "number",
+                    "format": "uint8"
+                  },
+                  "ttl": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "max_bytes": {
+                    "type": "number",
+                    "format": "uint64"
+                  },
+                  "storage": {
+                    "type": "string",
+                    "enum": [
+                      "file",
+                      "memory"
+                    ]
+                  },
+                  "replicas": {
+                    "type": "number",
+                    "format": "int"
+                  },
+                  "compression": {
+                    "type": "boolean"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "x-schema-name": "Metadata"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "Delete an object store, removing all keys",
+        "operationId": "ObjmStoreDestroy",
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/objm/buckets/{bucket}/keys": {
+      "get": {
+        "operationId": "ObjStoreKeys",
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "List all the keys in the store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of entity names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "x-content-type": "application/json"
+                }
+              },
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/objm/buckets/{bucket}/watch": {
+      "get": {
+        "operationId": "ObjStoreWatch",
+        "tags": [
+          "ObjectStore Management API"
+        ],
+        "summary": "Watches for changes in the specified store",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "description": "Bucket name",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lastValue",
+                "allHistory",
+                "updatesOnly"
+              ]
+            }
+          },
+          {
+            "name": "ignoreDeletes",
+            "in": "query",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "resumeRevision",
+            "in": "query",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "x-schema-name": "Metadata"
+                    },
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "max_chunk_size": {
+                      "type": "number",
+                      "format": "uint32"
+                    },
+                    "bucket": {
+                      "type": "string"
+                    },
+                    "nuid": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "mtime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "chunks": {
+                      "type": "number",
+                      "format": "uint32"
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/objm/buckets/{bucket}/keys/{key}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "bucket",
+          "description": "Bucket name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "in": "path",
+          "name": "key",
+          "description": "Key name",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "ObjGetEntry",
+        "tags": [
+          "ObjectStore Entry Operations"
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Nats-Obj-Name": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the entry"
+              },
+              "X-Nats-Obj-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the name of the bucket"
+              },
+              "X-Nats-Obj-Nuid": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the identifier that used to store the entry's data"
+              },
+              "X-Nats-Obj-Size": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "description": "the size of the entry's data in bytes"
+              },
+              "X-Nats-Obj-Mod-Time": {
+                "schema": {
+                  "type": "date-time"
+                },
+                "description": "date when the entry was last modified"
+              },
+              "X-Nats-Obj-Chunks": {
+                "schema": {
+                  "type": "number",
+                  "format": "uint32"
+                },
+                "description": "the number of chunks used to store the entry"
+              },
+              "X-Nats-Obj-Digest": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the Base64 encoded SHA-256 digest of the entry's data"
+              },
+              "X-Nats-Obj-Description": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "the description of the entry"
+              },
+              "X-Nats-Obj-Max-Chunk-Size": {
+                "schema": {
+                  "type": "number"
+                },
+                "description": "the maximum size in bytes of a single chunk"
+              },
+              "X-Nats-Obj-Link-Bucket": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "if set, the name of the bucket containing the entry"
+              },
+              "X-Nats-Obj-Link-Name": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "if set, the name of the entry as stored in a different bucket"
+              },
+              "X-Nats-Obj-Deleted": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "if true, the entry is marked as deleted"
+              }
+            },
+            "description": "success response body is payload, and metadata is HTTP headers",
+            "content": {
+              "application/text": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "x-content-type": "application/text"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Request"
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ObjectStore Entry Operations"
+        ],
+        "summary": "Adds or updates an entry to the object store,",
+        "operationId": "ObjCreateEntry",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ObjectInfo Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-content-type": "application/json",
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "x-schema-name": "Metadata"
+                    },
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "max_chunk_size": {
+                      "type": "number",
+                      "format": "uint32"
+                    },
+                    "bucket": {
+                      "type": "string"
+                    },
+                    "nuid": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "format": "uint64"
+                    },
+                    "mtime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "chunks": {
+                      "type": "number",
+                      "format": "uint32"
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ObjectStore Entry Operations"
+        ],
+        "summary": "Delete an entry",
+        "operationId": "ObjDeleteEntry",
+        "parameters": [
+          {
+            "name": "purge",
+            "in": "query",
+            "description": "Purges the deleted entry",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key not found"
+          }
+        }
+      }
+    },
+    "/nats/subjects/{subject}": {
+      "parameters": [
+        {
+          "name": "subject",
+          "in": "path",
+          "description": "subject",
+          "required": true,
+          "style": "simple",
+          "explode": false,
+          "schema": {
+            "maximum": 1,
+            "minimum": 1,
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "timeout",
+          "required": false,
+          "description": "how long to wait for a response in milliseconds. Default is 2000 milliseconds.",
+          "schema": {
+            "type": "number",
+            "format": "uint64"
+          }
+        },
+        {
+          "name": "NatsH-*",
+          "in": "header",
+          "required": false,
+          "explode": true,
+          "pattern": "^NatsH-*",
+          "description": "Header prefix - any HTTP request with a header that has the `NatsH-` prefix will have the prefix dropped, and have the header included on the published message.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "NATS Core Messaging (Experimental)"
+        ],
+        "summary": "Makes a request",
+        "operationId": "request",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string"
+                    },
+                    "reply": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "x-schema-name": "Header"
+                    }
+                  },
+                  "example": {
+                    "headers": {
+                      "key": "headers"
+                    },
+                    "data": "",
+                    "subject": "subject",
+                    "reply": "reply"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "NATS Core Messaging (Experimental)"
+        ],
+        "summary": "Publishes a message with an optional reply",
+        "operationId": "publish",
+        "parameters": [
+          {
+            "name": "reply",
+            "in": "query",
+            "description": "subject",
+            "required": true,
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "NatsH-*",
+            "in": "header",
+            "required": false,
+            "explode": true,
+            "pattern": "^NatsH-*",
+            "description": "Header prefix - any HTTP request with a header that has the `NatsH-` prefix will have the prefix dropped, and have the header included on the published message.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "queue group for the subscription",
+            "required": false,
+            "explode": false,
+            "schema": {
+              "maximum": 1,
+              "minimum": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/text": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "NATS Core Messaging (Experimental)"
+        ],
+        "summary": "Creates a subscription",
+        "operationId": "subscribe",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "the maximum number of keys to return, note internally it is limited to 1000",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "number",
+              "default": 1000,
+              "maximum": 1000,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string"
+                    },
+                    "reply": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "x-schema-name": "Header"
+                    }
+                  },
+                  "example": {
+                    "headers": {
+                      "key": "headers"
+                    },
+                    "data": "",
+                    "subject": "subject",
+                    "reply": "reply"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header"
+      }
+    },
+    "parameters": {
+      "bucket": {
+        "in": "path",
+        "name": "bucket",
+        "description": "Bucket name",
+        "required": true,
+        "style": "simple",
+        "explode": false,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      },
+      "key": {
+        "in": "path",
+        "name": "key",
+        "description": "Key name",
+        "required": true,
+        "style": "simple",
+        "explode": false,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      },
+      "revision_query": {
+        "in": "query",
+        "name": "revision",
+        "description": "the value of the key at the specified revision. Note the revision may not be available.",
+        "schema": {
+          "type": "number"
+        }
+      },
+      "previousRevision_query": {
+        "in": "query",
+        "name": "previousRevision",
+        "required": false,
+        "description": "the expected previous revision. If specified and the key is not at the specified revision the operation fails.",
+        "schema": {
+          "type": "number",
+          "format": "uint64"
+        }
+      },
+      "purge_query": {
+        "name": "purge",
+        "in": "query",
+        "description": "Purges the deleted entry",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "filter_query": {
+        "name": "filter",
+        "in": "query",
+        "required": false,
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      },
+      "include_query": {
+        "name": "include",
+        "in": "query",
+        "required": false,
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "lastValue",
+            "allHistory",
+            "updatesOnly"
+          ]
+        }
+      },
+      "ignoreDeletes_query": {
+        "name": "ignoreDeletes",
+        "in": "query",
+        "required": false,
+        "explode": true,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "resumeRevision_query": {
+        "name": "resumeRevision",
+        "in": "query",
+        "required": false,
+        "explode": true,
+        "schema": {
+          "type": "number",
+          "format": "uint64"
+        }
+      },
+      "apikey_query": {
+        "name": "authorization",
+        "in": "query",
+        "required": false,
+        "explode": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "metaOnly_query": {
+        "name": "metaOnly",
+        "in": "query",
+        "required": false,
+        "explode": true,
+        "description": "if true, only the metadata of the object is returned, the body will not contain any data",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "subject": {
+        "name": "subject",
+        "in": "path",
+        "description": "subject",
+        "required": true,
+        "style": "simple",
+        "explode": false,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      },
+      "timeout": {
+        "in": "query",
+        "name": "timeout",
+        "required": false,
+        "description": "how long to wait for a response in milliseconds. Default is 2000 milliseconds.",
+        "schema": {
+          "type": "number",
+          "format": "uint64"
+        }
+      },
+      "nats_pub_headers": {
+        "name": "NatsH-*",
+        "in": "header",
+        "required": false,
+        "explode": true,
+        "pattern": "^NatsH-*",
+        "description": "Header prefix - any HTTP request with a header that has the `NatsH-` prefix will have the prefix dropped, and have the header included on the published message.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "limit_query": {
+        "name": "limit",
+        "in": "query",
+        "description": "the maximum number of keys to return, note internally it is limited to 1000",
+        "required": false,
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "type": "number",
+          "default": 1000,
+          "maximum": 1000,
+          "minimum": 1
+        }
+      },
+      "reply_query": {
+        "name": "reply",
+        "in": "query",
+        "description": "subject",
+        "required": true,
+        "explode": false,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      },
+      "queue_query": {
+        "name": "query",
+        "in": "query",
+        "description": "queue group for the subscription",
+        "required": false,
+        "explode": false,
+        "schema": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "ValueEvent": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "delta": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "PUT",
+              "DEL",
+              "PURGE"
+            ]
+          }
+        }
+      },
+      "Value": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "bucket": {
+                "type": "string"
+              },
+              "created": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "revision": {
+                "type": "number",
+                "format": "uint64"
+              },
+              "delta": {
+                "type": "number",
+                "format": "uint64"
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "PUT",
+                  "DEL",
+                  "PURGE"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "value": {
+                "description": "value is base64 encoded",
+                "type": "string",
+                "format": "byte"
+              }
+            }
+          }
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Bucket": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "values": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "history": {
+            "type": "number",
+            "format": "uint8"
+          },
+          "ttl": {
+            "type": "number",
+            "format": "int64"
+          },
+          "backing_store": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "compression": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "x-schema-name": "Metadata"
+      },
+      "BucketConfig": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "max_value_size": {
+            "type": "number",
+            "format": "int32"
+          },
+          "history": {
+            "type": "number",
+            "format": "uint8"
+          },
+          "ttl": {
+            "type": "number",
+            "format": "int64"
+          },
+          "max_bytes": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "file",
+              "memory"
+            ]
+          },
+          "replicas": {
+            "type": "number",
+            "format": "int"
+          },
+          "compression": {
+            "type": "boolean"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "x-schema-name": "Metadata"
+          }
+        }
+      },
+      "ObjectLink": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ObjectInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "x-schema-name": "Metadata"
+          },
+          "link": {
+            "type": "object",
+            "properties": {
+              "bucket": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "max_chunk_size": {
+            "type": "number",
+            "format": "uint32"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "nuid": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number",
+            "format": "uint64"
+          },
+          "mtime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "chunks": {
+            "type": "number",
+            "format": "uint32"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Unknown": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      },
+      "Header": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "x-schema-name": "Header"
+      },
+      "Msg": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string",
+            "format": "binary"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "x-schema-name": "Header"
+          }
+        },
+        "example": {
+          "headers": {
+            "key": "headers"
+          },
+          "data": "",
+          "subject": "subject",
+          "reply": "reply"
+        }
+      }
+    },
+    "responses": {
+      "Revision": {
+        "description": "Success response",
+        "headers": {
+          "X-Nats-Kv-Sequence": {
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            },
+            "description": "the sequence assigned to the entry (only on application/text)"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          },
+          "application/text": {
+            "schema": {
+              "type": "number",
+              "format": "uint64"
+            }
+          }
+        }
+      },
+      "Success": {
+        "description": "Success response"
+      },
+      "Names": {
+        "description": "List of entity names",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "x-content-type": "application/json"
+            }
+          },
+          "application/text": {
+            "schema": {
+              "type": "string",
+              "x-content-type": "application/text"
+            }
+          }
+        }
+      },
+      "InvalidRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ObjectInfoResponse": {
+        "description": "ObjectInfo Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "x-content-type": "application/json",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "x-schema-name": "Metadata"
+                },
+                "link": {
+                  "type": "object",
+                  "properties": {
+                    "bucket": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "max_chunk_size": {
+                  "type": "number",
+                  "format": "uint32"
+                },
+                "bucket": {
+                  "type": "string"
+                },
+                "nuid": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "number",
+                  "format": "uint64"
+                },
+                "mtime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "chunks": {
+                  "type": "number",
+                  "format": "uint32"
+                },
+                "digest": {
+                  "type": "string"
+                },
+                "deleted": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
